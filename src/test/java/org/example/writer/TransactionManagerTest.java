@@ -44,9 +44,9 @@ public class TransactionManagerTest {
         final var dataSet = session.sql(String.format("SELECT * FROM %s.%s", configuration.getDatabaseName(), configuration.getTableName()));
         final var rows = dataSet.collectAsList();
         System.out.println(rows.size());
-        assertThat(transactionManager.hasFailedVerification()).withFailMessage("ACID Verification failed.").isFalse();
         assertThat(transactionManager.isHasFailedWriters()).withFailMessage("One or more writer threads failed").isFalse();
         assertThat(transactionManager.isHasFailedReaders()).withFailMessage("One or more reader threads failed").isFalse();
+        assertThat(transactionManager.hasFailedVerification()).withFailMessage("ACID Verification failed.").isFalse();
     }
 
 }

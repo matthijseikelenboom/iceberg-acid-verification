@@ -2,6 +2,7 @@ package org.example.writer;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.spark.SparkException;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.SaveMode;
@@ -98,7 +99,7 @@ public class TransactionWriter extends Thread {
             try {
                 transaction.run();
                 ranSuccessfully = true;
-            } catch (SparkException e) {
+            } catch (Throwable e) {
                 log.error("Transaction failed.", e);
                 if (retryCount >= 100) {
                     throw new RuntimeException(e);
@@ -153,10 +154,11 @@ public class TransactionWriter extends Thread {
         tryTransaction(() -> {
             var primaryKeyValues = transaction.dataManipulations
                     .stream()
-                    .map(dataManipulation -> "\"" + dataManipulation.primaryKeyValue + "\"")
-                    .collect(Collectors.joining());
+                   .map(dataManipulation -> dataManipulation.primaryKeyValue)
+                   .collect(Collectors.joining("', '", "'", "'"));
 
             var deleteStatement = String.format("DELETE FROM %s WHERE primaryKeyValue IN (%s)", fullyQualifiedTableName, primaryKeyValues);
+            System.out.println(deleteStatement);
             session.sql(deleteStatement);
         });
     }

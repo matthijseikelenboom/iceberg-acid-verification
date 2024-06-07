@@ -71,7 +71,7 @@ public class ResultSetExpectationProducer {
 
     private static Expectation createDeleteExpectation(final ResultSetExpectations expectations, final DataManipulation dataManipulation, final boolean isCommittedBeforeRead) {
         var recordToDelete = new Record(dataManipulation.primaryKeyValue, dataManipulation.partitionKeyValue, dataManipulation.dataValue);
-        var deleteSucceededExpectation = ExpectRecordPresence.create(recordToDelete);
+        var deleteSucceededExpectation = ExpectRecordAbsence.create(recordToDelete);
         if (isCommittedBeforeRead) {
             return deleteSucceededExpectation;
         } else {
