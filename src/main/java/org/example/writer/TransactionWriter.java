@@ -10,6 +10,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.example.resultset.InconsistentResultSetException;
 import org.example.resultset.Record;
 import org.example.transactionlog.*;
+import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -161,11 +162,27 @@ public class TransactionWriter extends Thread {
     }
 
     private void tryTransaction(Runnable r) {
-        try {
-            r.run();
-        } catch (Throwable t) {
-            System.out.println("ERROR! : " + t.getMessage());
+        var retryCount = 0;
+        var ranSuccessfully = false;
+        while (!ranSuccessfully) {
+            try {
+                r.run();
+                ranSuccessfully = true;
+            } catch (Throwable ex) {
+                var logger = LoggerFactory.getLogger("Iceberg logger");
+                logger.error("Transaction failed.", ex);
+                if (retryCount >= 100) {
+                    throw new RuntimeException(ex);
+                }
+                retryCount++;
+                logger.info("Retry counter is now at {}.", retryCount);
+            }
         }
+//        try {
+//            r.run();
+//        } catch (Throwable t) {
+//            System.out.println("ERROR! : " + t.getMessage());
+//        }
     }
 
     private static Record mapToRecord(DataManipulation dataManipulation) {
