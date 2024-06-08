@@ -65,6 +65,8 @@ After Docker has been started, you can run the test in `TransactionManagerTest`.
 Note that this test doesn't run on a distributed file system, like HDFS, unless you have it installed on the machine you're running it on.
 
 # Test results
-The test fails with the message "ACID Verification failed", which is pretty clear.
+~~The test fails with the message "ACID Verification failed", which is pretty clear.
 It's also visible in the console log, where it says "ReaderThread: Verification Failed".
-What is exacally is happening and why is unclear.
+What is exacally is happening and why is unclear.~~
+
+After a discussion and help of some devs of Iceberg, in [this](https://github.com/apache/iceberg/issues/10454) issue, some problems in the code where resolved and the test now passes.

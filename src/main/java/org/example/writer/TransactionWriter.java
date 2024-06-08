@@ -2,18 +2,14 @@ package org.example.writer;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.spark.SparkException;
 import org.apache.spark.sql.AnalysisException;
-import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.example.resultset.InconsistentResultSetException;
 import org.example.resultset.Record;
 import org.example.transactionlog.*;
-import org.slf4j.LoggerFactory;
 
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -110,81 +106,51 @@ public class TransactionWriter extends Thread {
     }
 
     private void insertTransaction(Transaction transaction) {
-        tryTransaction(() -> {
-            final var records = transaction.dataManipulations
-                    .stream()
-                    .map(TransactionWriter::mapToRecord)
-                    .collect(Collectors.toList());
-            final var dataSet = session.createDataset(records, Record.getEncoder());
+        final var records = transaction.dataManipulations
+                .stream()
+                .map(TransactionWriter::mapToRecord)
+                .collect(Collectors.toList());
+        final var dataSet = session.createDataset(records, Record.getEncoder());
 
-            try {
-                dataSet.writeTo(fullyQualifiedTableName).append();
-            } catch (NoSuchTableException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        try {
+            dataSet.writeTo(fullyQualifiedTableName).append();
+        } catch (NoSuchTableException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void updateTransaction(Transaction transaction) throws InconsistentResultSetException {
-        tryTransaction(() -> {
-            final var records = transaction.dataManipulations
-                    .stream()
-                    .map(TransactionWriter::mapToRecord)
-                    .collect(Collectors.toList());
+        final var records = transaction.dataManipulations
+                .stream()
+                .map(TransactionWriter::mapToRecord)
+                .collect(Collectors.toList());
 
-            try {
-                var rowsToUpdate = session.createDataset(records, Record.getEncoder());
-                var tempViewName = "temp_view_" + tempViewNumber.incrementAndGet();
-                rowsToUpdate.createTempView(tempViewName);
-                var updateStatement = "MERGE INTO " + fullyQualifiedTableName + " t \n" +
-                        "USING (SELECT * FROM " + tempViewName +") s \n" +
-                        "ON t.primaryKeyValue = s.primaryKeyValue \n" +
-                        "WHEN MATCHED THEN UPDATE SET t.dataValue = s.dataValue " +
-                        "WHEN NOT MATCHED THEN " +
-                        "INSERT (t.primaryKeyValue, t.partitionKeyValue, t.dataValue) VALUES (s.primaryKeyValue, s.partitionKeyValue, s.dataValue);";
-                System.out.println(updateStatement);
-                session.sql(updateStatement);
-            } catch (AnalysisException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        try {
+            var rowsToUpdate = session.createDataset(records, Record.getEncoder());
+            var tempViewName = "temp_view_" + tempViewNumber.incrementAndGet();
+            rowsToUpdate.createTempView(tempViewName);
+            var updateStatement = "MERGE INTO " + fullyQualifiedTableName + " t \n" +
+                    "USING (SELECT * FROM " + tempViewName +") s \n" +
+                    "ON t.primaryKeyValue = s.primaryKeyValue \n" +
+                    "WHEN MATCHED THEN UPDATE SET t.dataValue = s.dataValue " +
+                    "WHEN NOT MATCHED THEN " +
+                    "INSERT (t.primaryKeyValue, t.partitionKeyValue, t.dataValue) VALUES (s.primaryKeyValue, s.partitionKeyValue, s.dataValue);";
+            System.out.println(updateStatement);
+            session.sql(updateStatement);
+        } catch (AnalysisException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void deleteTransaction(Transaction transaction) throws InconsistentResultSetException {
-        tryTransaction(() -> {
-            var primaryKeyValues = transaction.dataManipulations
-                    .stream()
-                   .map(dataManipulation -> dataManipulation.primaryKeyValue)
-                   .collect(Collectors.joining("', '", "'", "'"));
+        var primaryKeyValues = transaction.dataManipulations
+                .stream()
+               .map(dataManipulation -> dataManipulation.primaryKeyValue)
+               .collect(Collectors.joining("', '", "'", "'"));
 
-            var deleteStatement = String.format("DELETE FROM %s WHERE primaryKeyValue IN (%s)", fullyQualifiedTableName, primaryKeyValues);
-            System.out.println(deleteStatement);
-            session.sql(deleteStatement);
-        });
-    }
-
-    private void tryTransaction(Runnable r) {
-        var retryCount = 0;
-        var ranSuccessfully = false;
-        while (!ranSuccessfully) {
-            try {
-                r.run();
-                ranSuccessfully = true;
-            } catch (Throwable ex) {
-                var logger = LoggerFactory.getLogger("Iceberg logger");
-                logger.error("Transaction failed.", ex);
-                if (retryCount >= 100) {
-                    throw new RuntimeException(ex);
-                }
-                retryCount++;
-                logger.info("Retry counter is now at {}.", retryCount);
-            }
-        }
-//        try {
-//            r.run();
-//        } catch (Throwable t) {
-//            System.out.println("ERROR! : " + t.getMessage());
-//        }
+        var deleteStatement = String.format("DELETE FROM %s WHERE primaryKeyValue IN (%s)", fullyQualifiedTableName, primaryKeyValues);
+        System.out.println(deleteStatement);
+        session.sql(deleteStatement);
     }
 
     private static Record mapToRecord(DataManipulation dataManipulation) {

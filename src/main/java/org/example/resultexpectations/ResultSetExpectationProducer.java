@@ -38,7 +38,7 @@ public class ResultSetExpectationProducer {
                         break;
                     default:
                         throw new IllegalStateException("Kaput!");
-                };
+                }
                 expectations.setRecordExpectation(dataManipulation.primaryKeyValue, expectation);
             }
         }
